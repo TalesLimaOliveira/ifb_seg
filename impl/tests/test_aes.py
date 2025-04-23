@@ -13,10 +13,12 @@ from cryp.aes.ecb import ecb_decryption, ecb_encryption
 
 
 def test_aes_bytes_to_state():
+    print("not implemented")
     pass
 
 
 def test_aes_state_to_bytes():
+    print("not implemented")
     pass
 
 
