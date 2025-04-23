@@ -342,8 +342,6 @@ def decryption(cipher: bytes, key: bytes) -> bytes:
         256: 14,
     }[key_bit_length]
 
-    number_keys = key_bit_length // 4
-
     state = bytes_to_state(cipher)
 
     key_schedule = key_expansion(key)
