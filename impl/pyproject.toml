@@ -1,0 +1,38 @@
+[tool.basedpyright]
+typeCheckingMode = "basic"
+reportArgumentType = "none"
+reportReturnType = "none"
+
+pythonVersion = "3.12.6"
+pythonPlatform = "Linux"
+
+[tool.pytest.ini_options]
+minversion = "8.3.5"
+addopts = "-ra -q -vv"
+testpaths = [
+    "tests",
+]
+
+[tool.black]
+line-length = 79
+target-version = ["py311", "py312", "py313"]
+exclude = '''
+/(
+    \.eggs
+  | \.git
+  | \.venv
+  | _build
+  | build
+  | dist
+  | migrations
+)/
+'''
+
+[tool.isort]
+profile = "black"
+src_paths = ["cryp", "tests"]
+multi_line_output = 3  # VHI
+line_length = 79
+force_grid_wrap = 0
+use_parentheses = true
+include_trailing_comma = true

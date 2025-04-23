@@ -1,0 +1,10 @@
+setuptools
+ipython
+
+# Code Quality
+black
+isort
+
+# Test
+pytest
+pytest-forked
