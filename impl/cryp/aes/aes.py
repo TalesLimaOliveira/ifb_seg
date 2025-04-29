@@ -92,9 +92,7 @@ def sub_bytes(state: list[list[int]]):
     Ref: 5.1.1
     """
     for row in range(len(state)):
-        state[row] = [
-            AES_S_BOX[state[row][column]] for column in range(len(state[0]))
-        ]
+        state[row] = [AES_S_BOX[state[row][column]] for column in range(len(state[0]))]
 
 
 def add_round_key(
@@ -296,9 +294,7 @@ def inv_shift_rows(state: list[list[int]]) -> list[list[int]]:
 
 def inv_sub_bytes(state: list[list[int]]) -> list[list[int]]:
     for row in range(len(state)):
-        state[row] = [
-            INV_S_BOX[state[row][column]] for column in range(len(state[0]))
-        ]
+        state[row] = [INV_S_BOX[state[row][column]] for column in range(len(state[0]))]
 
 
 def xtimes_0e(b):
@@ -341,6 +337,8 @@ def decryption(cipher: bytes, key: bytes) -> bytes:
         192: 12,
         256: 14,
     }[key_bit_length]
+
+    number_keys = key_bit_length // 4
 
     state = bytes_to_state(cipher)
 
