@@ -4,7 +4,7 @@ import streamlit as st
 
 def display_title():
     """Display the title of the application."""
-    st.title("Comunicação Criptografada")
+    st.title("Criptografia")
 
 def select_encryption_algorithm():
     """Create a dropdown for selecting the encryption algorithm."""

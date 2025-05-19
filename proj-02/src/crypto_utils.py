@@ -1,5 +1,6 @@
-from Crypto.Cipher import DES, AES
+from Crypto.Cipher import DES, AES, PKCS1_OAEP
 from Crypto.PublicKey import RSA
+import base64
 
 def pad(text, block_size):
     """Adds padding to the text to make its length a multiple of block_size."""
