@@ -7,7 +7,7 @@ Este projeto é uma aplicação web desenvolvida com Streamlit que permite aos u
 ## Estrutura do Projeto
 
 ```
-ifb_seg
+trabalho_01
 ├── src
 │   ├── __init__.py
 │   ├── app.py          # Ponto de entrada da aplicação Streamlit
@@ -27,7 +27,7 @@ Antes de executar a aplicação, você precisa ter o Python instalado em sua má
 
    ```
    git clone <URL_DO_REPOSITORIO>
-   cd ifb_seg
+   cd ifb_seg/trabalho_01
    ```
 
 2. Crie um ambiente virtual (opcional, mas recomendado):
