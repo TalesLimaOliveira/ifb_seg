@@ -69,6 +69,7 @@ class DashboardServer:
         self.attacker = None
         self.attack_thread = None
         self.attack_active = False
+        self.attack_target_port = None  # Porta específica sendo atacada
         
         # Registra callback para mudanças de status de porta
         if hasattr(self.port_manager, 'add_port_change_callback'):
@@ -231,6 +232,7 @@ class DashboardServer:
         """
         try:
             self.attack_active = True
+            self.attack_target_port = target_port  # Definir porta específica do ataque
             self.simulation_data['start_time'] = datetime.now()
             self.simulation_data['attacks'] += 1
             
@@ -243,33 +245,19 @@ class DashboardServer:
             }
             self.simulation_data['events'].append(event)
             
-            # Criar instância do atacante com config
-            # Tentar usar config do port_manager, senão usar config básico
-            if hasattr(self.port_manager, 'config'):
-                attacker_config = self.port_manager.config
-            else:
-                # Config básico para simulação
-                attacker_config = {
-                    'detection': {
-                        'ports': {
-                            22: {'protocol': 'SSH', 'description': 'Secure Shell'},
-                            80: {'protocol': 'HTTP', 'description': 'Web Server'},
-                            443: {'protocol': 'HTTPS', 'description': 'Secure Web Server'}
-                        }
-                    }
-                }
-            self.attacker = MultiPortAttacker(attacker_config)
+            # Não usar MultiPortAttacker que ataca múltiplas portas
+            # Usar simulação simples focada apenas na porta selecionada
             
             # Iniciar ataque em thread separada
             self.attack_thread = threading.Thread(
-                target=self._run_attack,
+                target=self._run_single_port_attack,
                 args=(target_port,),
                 daemon=True
             )
             self.attack_thread.start()
             
             # Emitir log
-            log_message = f'🚨 Iniciando simulação de ataque DDoS na porta {target_port}'
+            log_message = f'🚨 Iniciando simulação de ataque DDoS APENAS na porta {target_port}'
             self._emit_log({
                 'timestamp': datetime.now().isoformat(),
                 'level': 'WARNING',
@@ -282,12 +270,12 @@ class DashboardServer:
             self.logger.error(f"Erro ao iniciar simulação: {e}")
             self.attack_active = False
     
-    def _run_attack(self, target_port):
+    def _run_single_port_attack(self, target_port):
         """
-        Executa o ataque em thread separada.
+        Executa o ataque focado em uma única porta.
         
         Args:
-            target_port (int): Porta alvo
+            target_port (int): Porta alvo (apenas esta será atacada)
         """
         try:
             import time
@@ -302,7 +290,7 @@ class DashboardServer:
             self._emit_log({
                 'timestamp': datetime.now().isoformat(),
                 'level': 'WARNING',
-                'message': f'🚨 INICIANDO ATAQUE DDOS na porta {target_port} - Preparando múltiplos IPs atacantes'
+                'message': f'🚨 INICIANDO ATAQUE DDOS FOCADO na porta {target_port} - Gerando múltiplos IPs atacantes'
             })
             
             while self.attack_active and (time.time() - start_time) < duration:
@@ -372,6 +360,7 @@ class DashboardServer:
         """Para a simulação de ataque."""
         try:
             self.attack_active = False
+            self.attack_target_port = None  # Limpar porta alvo do ataque
             self.simulation_data['end_time'] = datetime.now()
             
             if self.attacker:
@@ -497,11 +486,16 @@ class DashboardServer:
                 else:
                     # Dados simulados para demonstração
                     import random
-                    if self.attack_active:
-                        # Durante ataque: muito mais tráfego
+                    if self.attack_active and port == self.attack_target_port:
+                        # Durante ataque: muito mais tráfego APENAS na porta alvo
                         base_packets = random.randint(500, 2000)
                         unique_ips_count = random.randint(15, 50)
                         attack_detected = random.choice([True, True, False])  # 66% chance de detectar
+                    elif self.attack_active and port != self.attack_target_port:
+                        # Outras portas durante ataque: tráfego normal baixo, SEM ataque
+                        base_packets = random.randint(5, 25)  # Tráfego normal baixo
+                        unique_ips_count = random.randint(1, 5)  # Poucos IPs únicos
+                        attack_detected = False  # Definitivamente SEM ataque detectado
                     else:
                         # Sem ataque: tráfego zero ou muito baixo
                         base_packets = 0
@@ -527,13 +521,14 @@ class DashboardServer:
                     'protocol': self._get_port_protocol(port),
                     'description': self._get_port_description(port),
                     'last_update': datetime.now().isoformat(),
-                    'is_under_attack': self.attack_active and attack_detected
+                    'is_under_attack': self.attack_active and port == self.attack_target_port and attack_detected
                 }
             
             return {
                 'ports': port_status,
                 'system': {
                     'attack_active': self.attack_active,
+                    'attack_target_port': self.attack_target_port,  # Adicionar porta alvo
                     'total_blocked_ports': len(self.port_manager.blocked_ports),
                     'simulation_data': self._prepare_simulation_data(),
                     'simulation_summary': {

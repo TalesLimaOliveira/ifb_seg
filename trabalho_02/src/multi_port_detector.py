@@ -28,6 +28,7 @@ import os
 from collections import defaultdict, deque
 from threading import Thread
 from datetime import datetime
+from utils import safe_log_message
 
 # Importações condicionais para compatibilidade
 try:
@@ -92,7 +93,7 @@ class MultiPortDetector:
         self._setup_logging()
         
         try:
-            self.logger.info(f"🔧 Detector inicializado para portas: {list(self.monitored_ports.keys())}")
+            self.logger.info(safe_log_message(f"🔧 Detector inicializado para portas: {list(self.monitored_ports.keys())}"))
         except UnicodeEncodeError:
             self.logger.info(f"Detector inicializado para portas: {list(self.monitored_ports.keys())}")
         
@@ -293,13 +294,13 @@ class MultiPortDetector:
         para modo simulação caso o Scapy não esteja disponível.
         """
         try:
-            self.logger.info(f"🔍 Iniciando monitoramento de portas: {list(self.monitored_ports.keys())}")
+            self.logger.info(safe_log_message(f"🔍 Iniciando monitoramento de portas: {list(self.monitored_ports.keys())}"))
         except UnicodeEncodeError:
             self.logger.info(f"Iniciando monitoramento de portas: {list(self.monitored_ports.keys())}")
         
         if not SCAPY_AVAILABLE:
             try:
-                self.logger.warning("⚠️ Scapy não disponível - Iniciando modo simulação")
+                self.logger.warning(safe_log_message("⚠️ Scapy não disponível - Iniciando modo simulação"))
             except UnicodeEncodeError:
                 self.logger.warning("Scapy não disponível - Iniciando modo simulação")
             self._start_simulation_mode()
@@ -313,7 +314,7 @@ class MultiPortDetector:
             port_filter = self._create_packet_filter()
             
             # Inicia captura de pacotes
-            self.logger.info("🌐 Iniciando captura de pacotes...")
+            self.logger.info(safe_log_message("🌐 Iniciando captura de pacotes..."))
             if SCAPY_AVAILABLE:
                 sniff(
                     prn=self.packet_callback,
@@ -322,8 +323,8 @@ class MultiPortDetector:
                 )
             
         except Exception as e:
-            self.logger.error(f"❌ Erro ao iniciar monitoramento: {e}")
-            self.logger.warning("⚠️ Continuando em modo simulação...")
+            self.logger.error(safe_log_message(f"❌ Erro ao iniciar monitoramento: {e}"))
+            self.logger.warning(safe_log_message("⚠️ Continuando em modo simulação..."))
             self._start_simulation_mode()
     
     def _configure_scapy_compatibility(self):
@@ -347,7 +348,7 @@ class MultiPortDetector:
     
     def _start_simulation_mode(self):
         """Inicia modo de simulação quando Scapy não está disponível."""
-        self.logger.info("🎭 Modo simulação ativado - Detector funcionando sem captura real")
+        self.logger.info(safe_log_message("🎭 Modo simulação ativado - Detector funcionando sem captura real"))
         # Em modo simulação, apenas mantém as estruturas ativas
         while True:
             time.sleep(1)
