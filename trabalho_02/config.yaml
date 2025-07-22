@@ -1,0 +1,38 @@
+detection:
+  time_window: 10
+  ports:
+    80:
+      max_requests: 100
+      protocol: "HTTP"
+      critical: false
+      description: "Servidor Web HTTP"
+    443:
+      max_requests: 150
+      protocol: "HTTPS"
+      critical: true
+      description: "Servidor Web HTTPS"
+    22:
+      max_requests: 50
+      protocol: "SSH"
+      critical: true
+      description: "Acesso SSH"
+
+notifications:
+  console:
+    enabled: true
+    level: "WARNING"
+  
+  log_file:
+    enabled: true
+    file: "ddos_alerts.log"
+    level: "ALERT"
+
+blocking:
+  auto_unblock: true
+  unblock_time: 300  # 5 minutos
+  whitelist_ips: ["127.0.0.1", "::1"]
+
+dashboard:
+  enabled: true
+  port: 5000
+  update_interval: 2  # segundos
