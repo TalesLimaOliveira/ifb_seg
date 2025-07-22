@@ -1,49 +1,11 @@
-"""
-Sistema de Notificações para Detecção DDoS
-
-Sistema avançado de notificações para alertas de ataques DDoS.
-Suporta múltiplos canais de notificação incluindo console, arquivos de log,
-e formatação clara dos alertas.
-
-Classes:
-    NotificationSystem: Sistema central de notificações
-
-Funcionalidades:
-    - Alertas estruturados no console com cores e emojis
-    - Logging em arquivo separado para auditoria
-    - Formatação clara e informativa dos alertas
-    - Integração com sistema de logs centralizado
-
-Author: Sistema de Detecção DDoS - IFB
-"""
-
-import time
-import logging
-import os
+import time 
+import logging  
+import os 
 from datetime import datetime
 
 
 class NotificationSystem:
-    """
-    Sistema central de notificações para eventos de segurança DDoS.
-    
-    Centraliza todas as notificações do sistema, fornecendo
-    canais de alerta padronizados para eventos de segurança.
-    
-    Attributes:
-        config (dict): Configurações do sistema
-        logger (Logger): Logger principal
-        alert_logger (Logger): Logger específico para alertas
-    """
-    
     def __init__(self, config):
-        """
-        Inicializa o sistema de notificações.
-        
-        Args:
-            config (dict): Configurações do sistema carregadas do config.yaml
-                Deve conter seção 'notifications' com configurações de log
-        """
         self.config = config
         self.logger = logging.getLogger(self.__class__.__name__)
         
@@ -52,11 +14,6 @@ class NotificationSystem:
             self._setup_alert_logging()
     
     def _setup_alert_logging(self):
-        """
-        Configura sistema de logging específico para alertas.
-        
-        Cria um logger separado para alertas de segurança na pasta logs/
-        """
         # Usar pasta logs/ centralizada
         log_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'logs')
         os.makedirs(log_dir, exist_ok=True)
@@ -76,18 +33,6 @@ class NotificationSystem:
         self.alert_logger.addHandler(file_handler)
     
     def send_alert(self, attack_data):
-        """
-        Envia alerta de ataque DDoS através de múltiplos canais.
-        
-        Args:
-            attack_data (dict): Dados do ataque detectado contendo:
-                - timestamp: Momento da detecção
-                - port: Porta atacada  
-                - protocol: Protocolo usado
-                - critical: Se é crítico ou não
-                - packet_count: Número de pacotes
-                - unique_ips: Número de IPs únicos
-        """
         timestamp = attack_data['timestamp']
         
         # Notificação no console
@@ -102,12 +47,6 @@ class NotificationSystem:
         self._play_alert_sound()
     
     def _console_alert(self, data):
-        """
-        Exibe alerta formatado no console.
-        
-        Args:
-            data (dict): Dados do ataque para exibição
-        """
         criticality = "🔴 CRÍTICO" if data['critical'] else "🟡 ALERTA"
         
         print("\n" + "="*60)
@@ -123,7 +62,6 @@ class NotificationSystem:
         print("="*60 + "\n")
     
     def _log_alert(self, data):
-        """Registra alerta em arquivo de log"""
         log_message = (
             f"DDoS_ATTACK | "
             f"PORT:{data['port']} | "
@@ -138,7 +76,6 @@ class NotificationSystem:
         self.alert_logger.warning(log_message)
     
     def _play_alert_sound(self):
-        """Toca som de alerta (se disponível)"""
         try:
             if os.name == 'nt':  # Windows
                 import winsound

@@ -1,114 +1,66 @@
-"""
-Detector Multi-Porta de Ataques DDoS
+import time        
+import logging     
+import os         
+from collections import defaultdict, deque 
+from threading import Thread        
+from datetime import datetime       
+from utils import safe_log_message     
 
-Este módulo implementa um sistema avançado de detecção de ataques DDoS
-que monitora múltiplas portas de rede simultaneamente usando captura 
-de pacotes em tempo real e análise de padrões de tráfego.
-
-Classes:
-    MultiPortDetector: Detector principal de ataques DDoS
-
-Funcionalidades:
-    - Monitoramento simultâneo de múltiplas portas
-    - Detecção baseada em thresholds configuráveis
-    - Coleta de estatísticas detalhadas por porta
-    - Suporte a whitelist de IPs confiáveis
-    - Modo simulação quando scapy não está disponível
-
-Dependencies:
-    - scapy: Para captura de pacotes (opcional)
-    - threading: Para processamento assíncrono
-
-Author: Sistema de Detecção DDoS - IFB
-"""
-
-import time
-import logging
-import os
-from collections import defaultdict, deque
-from threading import Thread
-from datetime import datetime
-from utils import safe_log_message
-
-# Importações condicionais para compatibilidade
+# Tentativa de importar scapy (pode não estar disponível)
 try:
     from scapy.all import sniff, IP, TCP, UDP, conf
-    SCAPY_AVAILABLE = True
+    SCAPY_AVAILABLE = True    # Flag indicando que scapy está disponível
 except ImportError:
-    SCAPY_AVAILABLE = False
+    SCAPY_AVAILABLE = False   # Modo simulação se scapy não estiver instalado
     print("⚠️ Scapy não disponível - Modo simulação ativado")
 
 
 class MultiPortDetector:
-    """
-    Detector avançado de ataques DDoS para múltiplas portas de rede.
-    
-    Esta classe implementa um sistema de monitoramento que captura pacotes
-    de rede em tempo real e analisa padrões de tráfego para detectar
-    possíveis ataques DDoS em portas específicas.
-    
-    Attributes:
-        config (dict): Configurações do sistema
-        port_manager (PortManager): Gerenciador de controle de portas
-        notification_system (NotificationSystem): Sistema de notificações
-        monitored_ports (dict): Portas sendo monitoradas
-        port_statistics (dict): Estatísticas coletadas por porta
-        simulation_mode (bool): Indica se está em modo simulação
-    """
-    
+       
     def __init__(self, config, port_manager, notification_system):
-        """
-        Inicializa o detector multi-porta.
-        
-        Args:
-            config (dict): Configurações do sistema carregadas do config.yaml
-            port_manager (PortManager): Instância do gerenciador de portas para bloqueios
-            notification_system (NotificationSystem): Sistema para envio de alertas
-        """
+        # Armazena referências dos componentes do sistema
         self.config = config
         self.port_manager = port_manager
         self.notification_system = notification_system
         
-        # Configurações de detecção extraídas do config
+        # Extrai configurações específicas de detecção
         self.time_window = config['detection']['time_window']
         self.monitored_ports = config['detection']['ports']
         
-        # Estruturas de dados para monitoramento
-        # Histórico: {porta: {ip: deque_timestamps}}
+        # Estruturas de dados para histórico de pacotes
+        # Formato: {porta: {ip: deque_com_timestamps}}
         self.port_ip_history = defaultdict(lambda: defaultdict(deque))
         
-        # Estatísticas por porta
+        # Estatísticas detalhadas por porta
         self.port_statistics = defaultdict(lambda: {
-            'total_packets': 0,
-            'unique_ips': set(),
-            'attack_detected': False,
-            'last_attack_time': None,
-            'first_packet_time': None
+            'total_packets': 0,      # Total de pacotes recebidos
+            'unique_ips': set(),     # IPs únicos que acessaram a porta
+            'attack_detected': False, # Se ataque foi detectado
+            'last_attack_time': None, # Timestamp do último ataque
+            'first_packet_time': None # Timestamp do primeiro pacote
         })
         
-        # Status das portas para dashboard
+        # Status atual das portas (para dashboard)
         self.port_status = {}
         
-        # Configurar logging
+        # Configura sistema de logging
         self._setup_logging()
         
+        # Log de inicialização (com tratamento de encoding)
         try:
             self.logger.info(safe_log_message(f"🔧 Detector inicializado para portas: {list(self.monitored_ports.keys())}"))
         except UnicodeEncodeError:
             self.logger.info(f"Detector inicializado para portas: {list(self.monitored_ports.keys())}")
         
     def _setup_logging(self):
-        """
-        Configura sistema de logging para o detector.
-        
-        Cria logs específicos para o detector na pasta logs/
-        """
+        # Cria diretório de logs se não existir
         log_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'logs')
         os.makedirs(log_dir, exist_ok=True)
         
-        # Configurar handler específico se ainda não configurado
+        # Configura logger específico para este componente
         self.logger = logging.getLogger(self.__class__.__name__)
-        if not self.logger.handlers:
+        if not self.logger.handlers:  # Evita handlers duplicados
+            # Cria handler para arquivo de log
             handler = logging.FileHandler(os.path.join(log_dir, 'detector.log'))
             formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
             handler.setFormatter(formatter)
@@ -116,94 +68,65 @@ class MultiPortDetector:
             self.logger.setLevel(logging.INFO)
         
     def packet_callback(self, packet):
-        """
-        Callback principal para processamento de pacotes capturados.
-        
-        Esta função é chamada para cada pacote capturado pela interface de rede
-        e realiza a análise inicial para determinar se o pacote deve ser processado.
-        
-        Args:
-            packet: Objeto de pacote capturado pelo Scapy
-        """
+        # Só processa se scapy estiver disponível
         if not SCAPY_AVAILABLE:
             return
             
-        # Verifica se é um pacote IP com TCP ou UDP
+        # Verifica se é pacote IP com protocolo TCP ou UDP
         if IP in packet and (TCP in packet or UDP in packet):
+            # Extrai informações do pacote
             src_ip = packet[IP].src
             dst_port = packet[TCP].dport if TCP in packet else packet[UDP].dport
             
-            # Processa apenas portas monitoradas
+            # Só processa se a porta estiver sendo monitorada
             if dst_port in self.monitored_ports:
                 self._process_packet(src_ip, dst_port)
     
     def _process_packet(self, source_ip, destination_port):
-        """
-        Processa um pacote para uma porta específica e realiza análise de DDoS.
-        
-        Args:
-            source_ip (str): IP de origem do pacote
-            destination_port (int): Porta de destino do pacote
-        """
+        # Marca timestamp atual
         current_time = time.time()
         
-        # Ignora IPs da whitelist para evitar falsos positivos
+        # Ignora IPs da whitelist (IPs confiáveis)
         if self.port_manager.is_whitelisted(source_ip):
             return
         
-        # Adiciona timestamp ao histórico da porta/IP
+        # Adiciona timestamp ao histórico desta combinação porta/IP
         self.port_ip_history[destination_port][source_ip].append(current_time)
         
-        # Limpa timestamps antigos (fora da janela de tempo)
+        # Remove timestamps antigos que estão fora da janela de tempo
         self._cleanup_old_timestamps(destination_port, source_ip, current_time)
         
-        # Atualiza estatísticas da porta
+        # Atualiza estatísticas gerais da porta
         self._update_port_statistics(destination_port, source_ip)
         
-        # Verifica se há indícios de ataque DDoS
+        # Verifica se padrão indica ataque DDoS
         self._check_for_ddos_attack(source_ip, destination_port, current_time)
     
     def _cleanup_old_timestamps(self, port, ip, current_time):
-        """
-        Remove timestamps antigos que estão fora da janela de tempo.
-        
-        Args:
-            port (int): Porta sendo analisada
-            ip (str): IP sendo analisado
-            current_time (float): Timestamp atual
-        """
+        # Remove timestamps mais antigos que a janela de tempo configurada
         while (self.port_ip_history[port][ip] and 
                current_time - self.port_ip_history[port][ip][0] > self.time_window):
-            self.port_ip_history[port][ip].popleft()
+            self.port_ip_history[port][ip].popleft()  # Remove o mais antigo
     
     def _check_for_ddos_attack(self, source_ip, port, current_time):
-        """
-        Verifica se o padrão de tráfego indica um ataque DDoS.
-        
-        Args:
-            source_ip (str): IP de origem
-            port (int): Porta de destino
-            current_time (float): Timestamp atual
-        """
+        # Conta quantos pacotes este IP enviou na janela de tempo
         packet_count = len(self.port_ip_history[port][source_ip])
+        # Busca o limite máximo configurado para esta porta
         max_allowed = self.monitored_ports[port]['max_requests']
         
+        # Se exceder o limite, considera ataque DDoS
         if packet_count > max_allowed:
             self._handle_ddos_attack(source_ip, port, packet_count)
     
     def _update_port_statistics(self, port, source_ip):
-        """
-        Atualiza estatísticas de uma porta específica.
-        
-        Args:
-            port (int): Porta a ser atualizada
-            source_ip (str): IP de origem do pacote
-        """
+        # Busca estatísticas da porta
         stats = self.port_statistics[port]
+        # Incrementa contador total de pacotes
         stats['total_packets'] += 1
+        # Adiciona IP ao conjunto de IPs únicos
         stats['unique_ips'].add(source_ip)
         
-        # Marca primeiro pacote se ainda não foi definido
+        # Marca timestamp do primeiro pacote se ainda não foi definido
         if stats['first_packet_time'] is None:
             stats['first_packet_time'] = time.time()
         
@@ -211,15 +134,11 @@ class MultiPortDetector:
         self._update_port_dashboard_status(port)
     
     def _update_port_dashboard_status(self, port):
-        """
-        Atualiza status da porta para dashboard.
-        
-        Args:
-            port (int): Porta a ser atualizada
-        """
+        # Busca estatísticas e configurações da porta
         stats = self.port_statistics[port]
         config_port = self.monitored_ports[port]
         
+        # Monta dados completos do status da porta
         self.port_status[port] = {
             'port': port,
             'protocol': config_port['protocol'],
@@ -233,10 +152,11 @@ class MultiPortDetector:
         }
     
     def _update_port_status(self, port):
-        """Atualiza status da porta para dashboard"""
+        # Busca dados necessários
         stats = self.port_statistics[port]
         config_port = self.monitored_ports[port]
         
+        # Constrói objeto de status completo
         self.port_status[port] = {
             'port': port,
             'protocol': config_port['protocol'],
@@ -250,21 +170,21 @@ class MultiPortDetector:
         }
     
     def _handle_ddos_attack(self, src_ip, dst_port, packet_count):
-        """Trata detecção de ataque DDoS"""
+        # Busca configurações da porta atacada
         port_config = self.monitored_ports[dst_port]
         
-        # Marca ataque como detectado
+        # Marca ataque como detectado nas estatísticas
         self.port_statistics[dst_port]['attack_detected'] = True
         self.port_statistics[dst_port]['last_attack'] = time.time()
         
-        # Log do ataque
+        # Registra alerta de ataque no log
         self.logger.warning(
             f"🚨 ATAQUE DDoS DETECTADO! "
             f"IP: {src_ip} | Porta: {dst_port} ({port_config['protocol']}) | "
             f"Pacotes: {packet_count} | Limite: {port_config['max_requests']}"
         )
         
-        # Dados do ataque para notificação
+        # Prepara dados do ataque para notificação
         attack_data = {
             'ip': src_ip,
             'port': dst_port,
@@ -276,28 +196,24 @@ class MultiPortDetector:
             'critical': port_config['critical']
         }
         
-        # Envia notificação
+        # Envia alerta através do sistema de notificações
         self.notification_system.send_alert(attack_data)
         
-        # Bloqueia a porta se ainda não estiver bloqueada
+        # Bloqueia a porta automaticamente se ainda não estiver bloqueada
         if dst_port not in self.port_manager.blocked_ports:
             self.port_manager.block_port(dst_port)
         
-        # Atualiza status da porta
+        # Atualiza status da porta no dashboard
         self._update_port_status(dst_port)
     
     def start_monitoring(self):
-        """
-        Inicia o monitoramento de pacotes em tempo real.
-        
-        Configura e inicia a captura de pacotes usando Scapy, com fallback
-        para modo simulação caso o Scapy não esteja disponível.
-        """
+        # Log de início do monitoramento (com tratamento de encoding)
         try:
             self.logger.info(safe_log_message(f"🔍 Iniciando monitoramento de portas: {list(self.monitored_ports.keys())}"))
         except UnicodeEncodeError:
             self.logger.info(f"Iniciando monitoramento de portas: {list(self.monitored_ports.keys())}")
         
+        # Verifica se Scapy está disponível para captura real
         if not SCAPY_AVAILABLE:
             try:
                 self.logger.warning(safe_log_message("⚠️ Scapy não disponível - Iniciando modo simulação"))
@@ -307,57 +223,53 @@ class MultiPortDetector:
             return
         
         try:
-            # Configura scapy para compatibilidade com Windows
+            # Configura Scapy para funcionar em diferentes sistemas
             self._configure_scapy_compatibility()
             
-            # Cria filtro para capturar apenas portas monitoradas
+            # Cria filtro BPF para capturar apenas as portas monitoradas
             port_filter = self._create_packet_filter()
             
-            # Inicia captura de pacotes
+            # Inicia captura de pacotes em tempo real
             self.logger.info(safe_log_message("🌐 Iniciando captura de pacotes..."))
             if SCAPY_AVAILABLE:
                 sniff(
-                    prn=self.packet_callback,
-                    filter=port_filter,
-                    store=0  # Não armazena pacotes para economizar memória
+                    prn=self.packet_callback,    # Callback para cada pacote
+                    filter=port_filter,          # Filtro das portas
+                    store=0                      # Não armazena para economizar memória
                 )
             
         except Exception as e:
+            # Em caso de erro, fallback para modo simulação
             self.logger.error(safe_log_message(f"❌ Erro ao iniciar monitoramento: {e}"))
             self.logger.warning(safe_log_message("⚠️ Continuando em modo simulação..."))
             self._start_simulation_mode()
     
     def _configure_scapy_compatibility(self):
-        """Configura Scapy para compatibilidade cross-platform."""
         if SCAPY_AVAILABLE:
             try:
+                # Tenta configurar socket raw para melhor compatibilidade
                 from scapy.all import L3RawSocket
                 conf.L3socket = L3RawSocket
             except:
-                pass  # Ignora se não conseguir configurar
+                # Ignora se não conseguir configurar (continua com padrão)
+                pass
     
     def _create_packet_filter(self):
-        """
-        Cria filtro BPF para capturar apenas pacotes das portas monitoradas.
-        
-        Returns:
-            str: String de filtro BPF
-        """
+        # Cria lista de filtros individuais para cada porta
         port_filters = [f"port {port}" for port in self.monitored_ports.keys()]
+        # Junta todos os filtros com OR lógico
         return " or ".join(port_filters)
     
     def _start_simulation_mode(self):
-        """Inicia modo de simulação quando Scapy não está disponível."""
         self.logger.info(safe_log_message("🎭 Modo simulação ativado - Detector funcionando sem captura real"))
-        # Em modo simulação, apenas mantém as estruturas ativas
+        # Em modo simulação, mantém o processo ativo mas sem captura real
         while True:
-            time.sleep(1)
+            time.sleep(1)  # Loop infinito para manter processo vivo
     
     def get_statistics(self):
-        """Retorna estatísticas atuais"""
         return {
-            'port_status': self.port_status,
-            'total_monitored_ports': len(self.monitored_ports),
-            'active_attacks': sum(1 for stats in self.port_statistics.values() if stats['attack_detected']),
-            'total_packets': sum(stats['total_packets'] for stats in self.port_statistics.values())
+            'port_status': self.port_status,                           # Status de todas as portas
+            'total_monitored_ports': len(self.monitored_ports),        # Total de portas monitoradas
+            'active_attacks': sum(1 for stats in self.port_statistics.values() if stats['attack_detected']),  # Ataques ativos
+            'total_packets': sum(stats['total_packets'] for stats in self.port_statistics.values())           # Total de pacotes processados
         }

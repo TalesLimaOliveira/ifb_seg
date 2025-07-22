@@ -1,65 +1,16 @@
-"""
-Dashboard Web para Sistema de Detecção DDoS
+import json           
+import logging        
+import os     
+from datetime import datetime    
+from flask import Flask, render_template, request  
+from flask_socketio import SocketIO, emit        
+import threading    
+import time         
+from multi_port_attacker import MultiPortAttacker  
+from utils import safe_log_message            
 
-Este módulo implementa uma interface web em tempo real para monitoramento
-e controle do sistema de detecção de ataques DDoS.
-
-Classes:
-    DashboardServer: Servidor web principal com interface WebSocket
-
-Funcionalidades:
-    - Interface web responsiva para monitoramento
-    - Comunicação em tempo real via WebSocket
-    - Simulação de ataques para testes
-    - Controle manual de portas (abrir/fechar)
-    - Logs em tempo real de atividades do sistema
-    - Estatísticas detalhadas por porta
-
-Dependencies:
-    - Flask: Framework web
-    - Flask-SocketIO: Comunicação WebSocket
-    - threading: Para operações assíncronas
-
-Author: Sistema de Detecção DDoS - IFB
-"""
-
-import json
-import logging
-import os
-from datetime import datetime
-from flask import Flask, render_template, request
-from flask_socketio import SocketIO, emit
-import threading
-import time
-from multi_port_attacker import MultiPortAttacker
-from utils import safe_log_message
-
-
-class DashboardServer:
-    """
-    Servidor web para dashboard de monitoramento em tempo real do sistema DDoS.
-    
-    Fornece uma interface web completa para visualização de estatísticas,
-    controle de portas, simulação de ataques e monitoramento de logs
-    em tempo real através de comunicação WebSocket.
-    
-    Attributes:
-        app (Flask): Aplicação Flask
-        socketio (SocketIO): Interface WebSocket
-        detector: Instância do detector multi-porta
-        port_manager: Instância do gerenciador de portas
-        attack_active (bool): Status da simulação de ataque
-        simulation_data (dict): Dados da simulação atual
-    """
-    
+class DashboardServer:    
     def __init__(self, detector, port_manager):
-        """
-        Inicializa o servidor dashboard.
-        
-        Args:
-            detector (MultiPortDetector): Instância do detector multi-porta
-            port_manager (PortManager): Instância do gerenciador de portas
-        """
         self.app = Flask(__name__, template_folder='../templates')
         self.app.config['SECRET_KEY'] = 'ddos_detection_secret_key'
         self.socketio = SocketIO(self.app, cors_allowed_origins="*")
@@ -91,11 +42,6 @@ class DashboardServer:
         self._setup_socket_events()
     
     def _setup_logging(self):
-        """
-        Configura sistema de logging para o dashboard.
-        
-        Cria logs específicos para o dashboard na pasta logs/
-        """
         log_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'logs')
         os.makedirs(log_dir, exist_ok=True)
         
@@ -111,29 +57,11 @@ class DashboardServer:
             self.logger.setLevel(logging.INFO)
     
     def _serialize_datetime(self, obj):
-        """
-        Converte objeto datetime para string JSON serializável.
-        
-        Args:
-            obj: Objeto a ser convertido (datetime ou outro tipo)
-            
-        Returns:
-            str: String ISO format se for datetime, objeto original caso contrário
-        """
         if isinstance(obj, datetime):
             return obj.isoformat()
         return obj
     
     def _prepare_simulation_data(self):
-        """
-        Prepara dados de simulação para serialização JSON.
-        
-        Converte objetos datetime para strings e organiza os dados
-        de simulação em um formato adequado para envio via WebSocket.
-        
-        Returns:
-            dict: Dados de simulação serializados
-        """
         data = self.simulation_data.copy()
         if data['start_time']:
             data['start_time'] = self._serialize_datetime(data['start_time'])
@@ -148,14 +76,7 @@ class DashboardServer:
         return data
     
     def _on_port_status_change(self, port, status, reason):
-        """
-        Callback chamado quando status de uma porta muda.
-        
-        Args:
-            port (int): Número da porta
-            status (str): Novo status ('BLOCKED' ou 'ACTIVE')
-            reason (str): Razão da mudança
-        """
+
         try:
             # Emite atualização imediata de status
             self._emit_status_update()
@@ -172,7 +93,6 @@ class DashboardServer:
             self.logger.error(f"Erro em callback de porta: {e}")
     
     def _setup_routes(self):
-        """Configura as rotas do Flask."""
         
         @self.app.route('/')
         def index():
@@ -180,11 +100,9 @@ class DashboardServer:
             return render_template('dashboard.html')
     
     def _setup_socket_events(self):
-        """Configura os eventos do WebSocket."""
         
         @self.socketio.on('connect')
         def handle_connect():
-            """Evento de conexão WebSocket."""
             self.logger.info("Cliente conectado ao WebSocket")
             self._emit_status_update()
             # Emitir log de boas-vindas
@@ -196,40 +114,29 @@ class DashboardServer:
         
         @self.socketio.on('disconnect')
         def handle_disconnect():
-            """Evento de desconexão WebSocket."""
             self.logger.info("Cliente desconectado do WebSocket")
         
         @self.socketio.on('get_status')
         def handle_get_status():
-            """Solicitar status atual do sistema."""
             self._emit_status_update()
         
         @self.socketio.on('start_attack')
         def handle_start_attack(data):
-            """Iniciar simulação de ataque."""
             port = data.get('port')
             if port and not self.attack_active:
                 self._start_attack_simulation(port)
         
         @self.socketio.on('stop_attack')
         def handle_stop_attack():
-            """Parar simulação de ataque."""
             self._stop_attack_simulation()
         
         @self.socketio.on('toggle_port')
         def handle_toggle_port(data):
-            """Alternar estado da porta (abrir/fechar)."""
             port = data.get('port')
             if port:
                 self._toggle_port_state(port)
     
     def _start_attack_simulation(self, target_port):
-        """
-        Inicia simulação de ataque DDoS.
-        
-        Args:
-            target_port (int): Porta alvo do ataque
-        """
         try:
             self.attack_active = True
             self.attack_target_port = target_port  # Definir porta específica do ataque
@@ -271,12 +178,6 @@ class DashboardServer:
             self.attack_active = False
     
     def _run_single_port_attack(self, target_port):
-        """
-        Executa o ataque focado em uma única porta.
-        
-        Args:
-            target_port (int): Porta alvo (apenas esta será atacada)
-        """
         try:
             import time
             import random
@@ -357,7 +258,6 @@ class DashboardServer:
                 self._stop_attack_simulation()
     
     def _stop_attack_simulation(self):
-        """Para a simulação de ataque."""
         try:
             self.attack_active = False
             self.attack_target_port = None  # Limpar porta alvo do ataque
@@ -388,12 +288,6 @@ class DashboardServer:
             self.logger.error(f"Erro ao parar simulação: {e}")
     
     def _toggle_port_state(self, port):
-        """
-        Alterna o estado da porta (abrir/fechar).
-        
-        Args:
-            port (int): Porta a ser alternada
-        """
         try:
             if port in self.port_manager.blocked_ports:
                 # Desbloquear porta
@@ -434,7 +328,6 @@ class DashboardServer:
             })
     
     def _emit_status_update(self):
-        """Emite atualização de status via WebSocket."""
         try:
             status_data = self._get_current_status()
             self.socketio.emit('system_update', status_data)
@@ -443,12 +336,6 @@ class DashboardServer:
             self.logger.error(f"Erro ao emitir atualização: {e}")
     
     def _emit_log(self, log_data):
-        """
-        Emite entrada de log via WebSocket.
-        
-        Args:
-            log_data (dict): Dados do log
-        """
         try:
             # Garantir que o timestamp está no formato correto
             if 'timestamp' not in log_data:
@@ -468,12 +355,6 @@ class DashboardServer:
             self.logger.error(f"Erro ao emitir log: {e}")
     
     def _get_current_status(self):
-        """
-        Obtém status atual do sistema.
-        
-        Returns:
-            dict: Status do sistema
-        """
         try:
             # Portas fixas para monitoramento
             monitored_ports = [22, 80, 443]
@@ -546,15 +427,6 @@ class DashboardServer:
             return {'error': str(e)}
     
     def _get_port_protocol(self, port):
-        """
-        Obtém protocolo da porta.
-        
-        Args:
-            port (int): Número da porta
-            
-        Returns:
-            str: Protocolo da porta
-        """
         protocols = {
             22: 'SSH',
             80: 'HTTP',
@@ -563,15 +435,6 @@ class DashboardServer:
         return protocols.get(port, 'TCP')
     
     def _get_port_description(self, port):
-        """
-        Obtém descrição da porta.
-        
-        Args:
-            port (int): Número da porta
-            
-        Returns:
-            str: Descrição da porta
-        """
         descriptions = {
             22: 'Secure Shell Protocol',
             80: 'HyperText Transfer Protocol',
@@ -580,7 +443,6 @@ class DashboardServer:
         return descriptions.get(port, 'Serviço Desconhecido')
     
     def start_background_updates(self):
-        """Inicia thread para atualizações automáticas."""
         def update_loop():
             # Log inicial do sistema
             self._emit_log({
@@ -625,14 +487,6 @@ class DashboardServer:
         update_thread.start()
     
     def run(self, host='localhost', port=5000, debug=False):
-        """
-        Executa o servidor dashboard.
-        
-        Args:
-            host (str): Host do servidor
-            port (int): Porta do servidor
-            debug (bool): Modo debug
-        """
         try:
             # Suprimir logs do werkzeug
             import logging
