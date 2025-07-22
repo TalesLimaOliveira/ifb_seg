@@ -1,8 +1,4 @@
-"""
-Simulador de Ataques DDoS Multi-Porta
-
-Simula ataques DDoS para testar a eficácia do sistema de detecção.
-"""
+# Simulador de Ataques DDoS Multi-Porta - Simula ataques para testar o sistema de detecção
 
 import logging
 import random
@@ -11,7 +7,7 @@ import time
 
 
 class MultiPortAttacker:
-    """Simulador de ataques DDoS para testes do sistema."""
+    # Simulador de ataques DDoS para testes do sistema
     
     def __init__(self, config):
         self.config = config
@@ -27,7 +23,7 @@ class MultiPortAttacker:
         }
 
     def select_attack_port(self):
-        """Seleciona porta aleatória para ataque."""
+        # Seleciona porta aleatória para ataque
         self.attack_port = random.choice(self.monitored_ports)
         self.attack_stats['target_port'] = self.attack_port
         
@@ -40,7 +36,7 @@ class MultiPortAttacker:
         return self.attack_port
 
     def simulate_normal_traffic(self, port, duration=60):
-        """Simula tráfego normal em uma porta."""
+        # Simula tráfego normal em uma porta
         port_info = self.config['detection']['ports'][port]
         self.logger.info(f"✅ Iniciando tráfego normal na porta {port} ({port_info['protocol']})")
         
@@ -57,7 +53,7 @@ class MultiPortAttacker:
         self.logger.info(f"✅ Tráfego normal finalizado na porta {port}: {packet_count} pacotes")
 
     def simulate_ddos_attack(self, port, duration=60, intensity='high'):
-        """Simula ataque DDoS em uma porta específica."""
+        # Simula ataque DDoS em uma porta específica
         port_info = self.config['detection']['ports'][port]
         max_requests = port_info['max_requests']
         
@@ -102,7 +98,7 @@ class MultiPortAttacker:
         )
 
     def run_simulation(self, duration=120, attack_intensity='high'):
-        """Executa simulação completa de ataque multi-porta."""
+        # Executa simulação completa de ataque multi-porta
         self.logger.info("🚀 INICIANDO SIMULAÇÃO MULTI-PORTA")
         
         attack_port = self.select_attack_port()
@@ -142,7 +138,7 @@ class MultiPortAttacker:
         self._print_attack_summary()
 
     def _print_attack_summary(self):
-        """Exibe resumo da simulação executada."""
+        # Exibe resumo da simulação executada
         if self.attack_stats['start_time']:
             duration = time.time() - self.attack_stats['start_time']
             
